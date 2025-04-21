@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ordonnabot-dz
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: TELEGRAM_TOKEN
+        value: "TON_TOKEN_ICI"
+      - key: WEBHOOK_SECRET
+        value: "ordonnasecret"
