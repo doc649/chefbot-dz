@@ -24,6 +24,23 @@ def webhook():
         if user_text:
             message_clean = user_text.lower().strip()
 
+            # 🎬 Message d'accueil /start
+            if message_clean == "/start":
+                welcome_message = (
+                    "👋 Marhba bik sur OrdonnaBot DZ 🇩🇿\n\n"
+                    "📷 Envoie une ordonnance en texte ou en photo.\n\n"
+                    "🗣️ Choisis ta langue de réponse :\n"
+                    "/langue_fr → Français\n"
+                    "/langue_dz → Darija DZ (lettres latines)\n"
+                    "/langue_ar → العربية\n\n"
+                    "🧾 Je vais t'expliquer ton ordonnance de manière claire et simple."
+                )
+                requests.post(f"{BOT_URL}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": welcome_message
+                })
+                return "ok"
+
             # 🔁 Commandes de changement de langue
             if message_clean == "/langue_fr":
                 user_langs[chat_id] = "fr"
