@@ -18,7 +18,7 @@ def webhook():
         chat_id = update["message"]["chat"]["id"]
         user_text = update["message"].get("text", "")
 
-                if user_text:
+        if user_text:
             message_clean = user_text.lower().strip()
             interdits = ["bonjour", "salut", "cc", "slt", "merci", "ok", "hello", "test", "wesh"]
 
@@ -35,7 +35,7 @@ def webhook():
 
             try:
                 response = openai.ChatCompletion.create(
-                   model="gpt-3.5-turbo",
+                    model="gpt-3.5-turbo",
                     messages=[
                         {
                             "role": "system",
@@ -63,13 +63,4 @@ def webhook():
                     "text": gpt_reply
                 }
             )
-
-    return '', 200
-
-
-@app.route("/")
-def home():
-    return "OrdonnaBot is live!"
-
-if __name__ == "__main__":
-    app.run(debug=True)
+    return "ok"
