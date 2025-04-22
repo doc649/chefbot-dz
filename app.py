@@ -9,8 +9,20 @@ TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "ordonnasecret")
 BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-# 🌐 Stockage temporaire des langues utilisateur (session uniquement)
+# 🌐 Stockage temporaire des langues utilisateur
 user_langs = {}
+
+# 📩 Envoi d’un message texte
+def send_message(chat_id, text):
+    requests.post(f"{BOT_URL}/sendMessage", json={
+        "chat_id": chat_id,
+        "text": text
+    })
+
+# 📷 Récupération du chemin d’une image Telegram
+def get_file_path(file_id):
+    response = requests.get(f"{BOT_URL}/getFile?file_id={file_id}")
+    return response.json()["result"]["file_path"]
 
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
@@ -19,12 +31,54 @@ def webhook():
 
     if "message" in update:
         chat_id = update["message"]["chat"]["id"]
-        user_text = update["message"].get("text", "")
 
+        # 📸 Si l'utilisateur envoie une photo
+        if "photo" in update["message"]:
+            file_id = update["message"]["photo"][-1]["file_id"]
+            file_path = get_file_path(file_id)
+            image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+
+            send_message(chat_id, "📸 Image reçue. Traitement IA en cours...")
+
+            try:
+                vision_response = openai.ChatCompletion.create(
+                    model="gpt-4-vision-preview",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Lis et décris cette ordonnance médicale comme si tu étais un pharmacien algérien. Résume les médicaments, doses, et posologie de manière claire."
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": image_url,
+                                        "detail": "high"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=1000
+                )
+
+                result_text = vision_response.choices[0].message["content"]
+
+            except Exception as e:
+                print(f"Erreur GPT-Vision: {e}")
+                result_text = "❌ Une erreur est survenue pendant l'analyse de l'image."
+
+            send_message(chat_id, result_text)
+            return "ok"
+
+        # 🧾 Traitement texte normal
+        user_text = update["message"].get("text", "")
         if user_text:
             message_clean = user_text.lower().strip()
 
-            # 🎬 Message d'accueil /start
+            # 🎬 /start
             if message_clean == "/start":
                 welcome_message = (
                     "👋 Marhba bik sur OrdonnaBot DZ 🇩🇿\n\n"
@@ -35,53 +89,34 @@ def webhook():
                     "/langue_ar → العربية\n\n"
                     "🧾 Je vais t'expliquer ton ordonnance de manière claire et simple."
                 )
-                requests.post(f"{BOT_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": welcome_message
-                })
+                send_message(chat_id, welcome_message)
                 return "ok"
 
-            # 🔁 Commandes de changement de langue
+            # 🔁 Langue
             if message_clean == "/langue_fr":
                 user_langs[chat_id] = "fr"
-                requests.post(f"{BOT_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": "✅ Langue changée en français."
-                })
+                send_message(chat_id, "✅ Langue changée en français.")
                 return "ok"
 
             if message_clean == "/langue_dz":
                 user_langs[chat_id] = "dz"
-                requests.post(f"{BOT_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": "✅ Langue changée en darija DZ (lettres latines)."
-                })
+                send_message(chat_id, "✅ Langue changée en darija DZ (lettres latines).")
                 return "ok"
 
             if message_clean == "/langue_ar":
                 user_langs[chat_id] = "ar"
-                requests.post(f"{BOT_URL}/sendMessage", json={
-                    "chat_id": chat_id,
-                    "text": "✅ تم تغيير اللغة إلى العربية."
-                })
+                send_message(chat_id, "✅ تم تغيير اللغة إلى العربية.")
                 return "ok"
 
-            # 🧼 Blocage des messages inutiles
+            # 🧼 Filtrage
             interdits = ["bonjour", "salut", "cc", "slt", "merci", "ok", "hello", "test", "wesh"]
             if message_clean in interdits:
                 print("💥 INTERCEPTION ACTIVE BY HAMZA : message bloqué ->", message_clean)
-                requests.post(
-                    f"{BOT_URL}/sendMessage",
-                    json={
-                        "chat_id": chat_id,
-                        "text": "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz ou /langue_ar."
-                    }
-                )
+                send_message(chat_id, "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz ou /langue_ar.")
                 return "ok"
 
-            # 🧠 Choix du prompt GPT selon la langue
+            # 🔠 Prompt selon langue
             langue = user_langs.get(chat_id, "fr")
-
             if langue == "dz":
                 prompt = (
                     "Réponds en darija algérienne (lettres latines). "
@@ -100,7 +135,6 @@ def webhook():
                     "Ne dis jamais 'bonjour', ni 'comment puis-je vous aider'."
                 )
 
-            # 🤖 Appel GPT
             try:
                 response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
@@ -110,16 +144,9 @@ def webhook():
                     ]
                 )
                 gpt_reply = response.choices[0].message["content"]
-
             except Exception as e:
                 print(f"Erreur GPT: {e}")
                 gpt_reply = "❌ Une erreur est survenue. Veuillez réessayer plus tard."
 
-            requests.post(
-                f"{BOT_URL}/sendMessage",
-                json={
-                    "chat_id": chat_id,
-                    "text": gpt_reply
-                }
-            )
+            send_message(chat_id, gpt_reply)
     return "ok"
