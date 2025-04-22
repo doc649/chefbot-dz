@@ -24,7 +24,7 @@ def webhook():
         if user_text:
             message_clean = user_text.lower().strip()
 
-            # 🔁 Gestion du choix de langue
+            # 🔁 Commandes de changement de langue
             if message_clean == "/langue_fr":
                 user_langs[chat_id] = "fr"
                 requests.post(f"{BOT_URL}/sendMessage", json={
@@ -41,6 +41,14 @@ def webhook():
                 })
                 return "ok"
 
+            if message_clean == "/langue_ar":
+                user_langs[chat_id] = "ar"
+                requests.post(f"{BOT_URL}/sendMessage", json={
+                    "chat_id": chat_id,
+                    "text": "✅ تم تغيير اللغة إلى العربية."
+                })
+                return "ok"
+
             # 🧼 Blocage des messages inutiles
             interdits = ["bonjour", "salut", "cc", "slt", "merci", "ok", "hello", "test", "wesh"]
             if message_clean in interdits:
@@ -49,7 +57,7 @@ def webhook():
                     f"{BOT_URL}/sendMessage",
                     json={
                         "chat_id": chat_id,
-                        "text": "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz."
+                        "text": "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz ou /langue_ar."
                     }
                 )
                 return "ok"
@@ -59,8 +67,13 @@ def webhook():
 
             if langue == "dz":
                 prompt = (
-                    "Réponds en darija algérienne (arabe DZ en lettres latines). "
-                    "Sois court, clair, sans bavardage. Décris juste les médicaments et comment les prendre."
+                    "Réponds en darija algérienne (lettres latines). "
+                    "Sois court, clair, sans bavardage. Décris les médicaments et comment les prendre."
+                )
+            elif langue == "ar":
+                prompt = (
+                    "أنت مساعد طبي اسمه OrdonnaBot. تشرح وصفات الأدوية بلغة عربية فصحى مبسطة ومباشرة. "
+                    "يجب أن تكون الردود قصيرة، واضحة، ومناسبة للمرضى لفهم العلاج."
                 )
             else:
                 prompt = (
