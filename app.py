@@ -41,33 +41,32 @@ def webhook():
             send_message(chat_id, "📸 Image reçue. Traitement IA en cours...")
 
             try:
-               vision_response = openai.ChatCompletion.create(
-    model="gpt-4-turbo",
-    messages=[
-        {
-            "role": "user",
-            "content": [
-                {
-                    "type": "text",
-                    "text": (
-                        "Lis cette ordonnance médicale manuscrite et résume uniquement les médicaments, doses et fréquence en 3 lignes maximum. "
-                        "Ensuite, ajoute une seule phrase finale courte avec un conseil ou alerte si possible (effet secondaire, interaction ou mise en garde). "
-                        "Ne répète pas d'informations inutiles. Sois rapide, clair et orienté patient."
-                    )
-                },
-                {
-                    "type": "image_url",
-                    "image_url": {
-                        "url": image_url,
-                        "detail": "high"
-                    }
-                }
-            ]
-        }
-    ],
-    max_tokens=750
-)
-
+                vision_response = openai.ChatCompletion.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Lis cette ordonnance médicale manuscrite et résume uniquement les médicaments, doses et fréquence en 3 lignes maximum. "
+                                        "Ensuite, ajoute une seule phrase finale courte avec un conseil ou alerte si possible (effet secondaire, interaction ou mise en garde). "
+                                        "Ne répète pas d'informations inutiles. Sois rapide, clair et orienté patient."
+                                    )
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": image_url,
+                                        "detail": "high"
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=750
+                )
 
                 result_text = vision_response.choices[0].message["content"]
 
@@ -78,12 +77,12 @@ def webhook():
             send_message(chat_id, result_text)
             return "ok"
 
-        # 🧾 Traitement texte normal
+        # 📟 Traitement texte normal
         user_text = update["message"].get("text", "")
         if user_text:
             message_clean = user_text.lower().strip()
 
-            # 🎬 /start
+            # 🎮 /start
             if message_clean == "/start":
                 welcome_message = (
                     "👋 Marhba bik sur OrdonnaBot DZ 🇩🇿\n\n"
@@ -92,12 +91,12 @@ def webhook():
                     "/langue_fr → Français\n"
                     "/langue_dz → Darija DZ (lettres latines)\n"
                     "/langue_ar → العربية\n\n"
-                    "🧾 Je vais t'expliquer ton ordonnance de manière claire et simple."
+                    "📟 Je vais t'expliquer ton ordonnance de manière claire et simple."
                 )
                 send_message(chat_id, welcome_message)
                 return "ok"
 
-            # 🔁 Langue
+            # 🔄 Langue
             if message_clean == "/langue_fr":
                 user_langs[chat_id] = "fr"
                 send_message(chat_id, "✅ Langue changée en français.")
@@ -113,11 +112,11 @@ def webhook():
                 send_message(chat_id, "✅ تم تغيير اللغة إلى العربية.")
                 return "ok"
 
-            # 🧼 Filtrage
+            # 🪥 Filtrage
             interdits = ["bonjour", "salut", "cc", "slt", "merci", "ok", "hello", "test", "wesh"]
             if message_clean in interdits:
                 print("💥 INTERCEPTION ACTIVE BY HAMZA : message bloqué ->", message_clean)
-                send_message(chat_id, "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz ou /langue_ar.")
+                send_message(chat_id, "📟 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz ou /langue_ar.")
                 return "ok"
 
             # 🔠 Prompt selon langue
