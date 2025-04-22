@@ -18,7 +18,21 @@ def webhook():
         chat_id = update["message"]["chat"]["id"]
         user_text = update["message"].get("text", "")
 
-        if user_text:
+                if user_text:
+            message_clean = user_text.lower().strip()
+            interdits = ["bonjour", "salut", "cc", "slt", "merci", "ok", "hello", "test", "wesh"]
+
+            if message_clean in interdits:
+                print("💥 INTERCEPTION ACTIVE BY HAMZA : message bloqué ->", message_clean)
+                requests.post(
+                    f"{BOT_URL}/sendMessage",
+                    json={
+                        "chat_id": chat_id,
+                        "text": "🧾 Envoie une ordonnance pour que je puisse t'aider. Tu peux choisir la langue avec /langue_fr ou /langue_dz."
+                    }
+                )
+                return "ok"
+
             try:
                 response = openai.ChatCompletion.create(
                    model="gpt-3.5-turbo",
@@ -28,7 +42,8 @@ def webhook():
                             "content": (
                                 "Tu es OrdonnaBot, un assistant médical algérien. "
                                 "Tu aides les gens à comprendre leurs ordonnances et les traitements prescrits. "
-                                "Réponds toujours de manière claire, bienveillante, et en français."
+                                "Réponds toujours de manière claire, bienveillante, et en français. "
+                                "Ne dis jamais 'bonjour', ni 'comment puis-je vous aider'."
                             )
                         },
                         {"role": "user", "content": user_text}
