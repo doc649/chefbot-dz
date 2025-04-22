@@ -41,28 +41,33 @@ def webhook():
             send_message(chat_id, "📸 Image reçue. Traitement IA en cours...")
 
             try:
-                vision_response = openai.ChatCompletion.create(
-                    model="gpt-4-turbo",
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Lis et décris cette ordonnance médicale comme si tu étais un pharmacien algérien. Résume les médicaments, doses, et posologie de manière claire."
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": image_url,
-                                        "detail": "high"
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    max_tokens=1000
-                )
+               vision_response = openai.ChatCompletion.create(
+    model="gpt-4-turbo",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "text",
+                    "text": (
+                        "Lis cette ordonnance médicale manuscrite et résume uniquement les médicaments, doses et fréquence en 3 lignes maximum. "
+                        "Ensuite, ajoute une seule phrase finale courte avec un conseil ou alerte si possible (effet secondaire, interaction ou mise en garde). "
+                        "Ne répète pas d'informations inutiles. Sois rapide, clair et orienté patient."
+                    )
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": image_url,
+                        "detail": "high"
+                    }
+                }
+            ]
+        }
+    ],
+    max_tokens=750
+)
+
 
                 result_text = vision_response.choices[0].message["content"]
 
