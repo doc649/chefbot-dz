@@ -13,6 +13,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Mémoire simple des langues par session (en RAM, pas persisté)
 user_languages = {}
+# Mémoire temporaire pour éviter répétition
+recent_users = {}
 
 # Envoi d'un message Telegram
 
@@ -72,6 +74,11 @@ def webhook():
             return "ok"
 
         langue = user_languages.get(chat_id, "darija")
+
+        # Ne pas répondre plusieurs fois au même message
+        if recent_users.get(chat_id) == user_text:
+            return "ok"
+        recent_users[chat_id] = user_text
 
         try:
             if langue == "arabe":
