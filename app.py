@@ -10,9 +10,12 @@ BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     update = request.get_json()
-    chat_id = update["message"]["chat"]["id"]
-    requests.post(f"{BOT_URL}/sendMessage", json={
-        "chat_id": chat_id,
-        "text": "✅ Pong! Le webhook est connecté correctement."
-    })
+    print("[PONG TEST] Message reçu :", update)
+
+    if "message" in update:
+        chat_id = update["message"]["chat"]["id"]
+        requests.post(f"{BOT_URL}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": "✅ Pong! Le webhook est connecté correctement."
+        })
     return "ok"
