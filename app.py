@@ -35,8 +35,7 @@ def webhook():
             if user_text.lower() in ["/start", "start"]:
                 accueil = (
                     "\ud83c\udf1f *Marhba bik f ChefBot DZ !* \ud83c\udf1f\n\n"
-                    "\ud83d\udcf8 Sowerli thalajtek, wela \ud83d\udcac ktibli chno kayen 3andek,
-                    w n9olak wach t9dar tdiro lyoma.\n\n"
+                    "\ud83d\udcf8 Sowerli thalajtek, wela \ud83d\udcac ktibli chno kayen 3andek, w n9olak wach t9dar tdiro lyoma.\n\n"
                     "\ud83c\udf5c N3tik wa7ed lwasfa DZ + estmation dyal calories."
                 )
                 send_message(chat_id, accueil)
@@ -48,8 +47,7 @@ def webhook():
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": (
-                            "Rak chef DZ. L'utilisateur yktblk les ingrédients li 3ando, nti tqtrah 3lih wa7ed lwasfa DZ s7ila, ma tkhltech.
-                            Ajout estimation calories.")},
+                            "Rak chef DZ. L'utilisateur yktblk les ingrédients li 3ando, nti tqtrah 3lih wa7ed lwasfa DZ s7ila, ma tkhltech. Ajout estimation calories.")},
                         {"role": "user", "content": user_text}
                     ]
                 )
