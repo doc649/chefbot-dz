@@ -23,6 +23,7 @@ def send_message(chat_id, text):
 def send_voice(chat_id, text, lang_code="ar"):
     from gtts import gTTS
     from io import BytesIO
+    text = text.replace("\n", ". ")[:400]  # Limiter les répétitions et la longueur
     audio = gTTS(text=text, lang=lang_code)
     mp3_fp = BytesIO()
     audio.write_to_fp(mp3_fp)
@@ -70,24 +71,23 @@ def webhook():
             send_message(chat_id, accueil)
             return "ok"
 
-        # Détection de la langue choisie (default : darija)
         langue = user_languages.get(chat_id, "darija")
 
-        # Traitement texte (ingrédients)
         try:
             if langue == "arabe":
                 system_prompt = (
-                    "أنت ChefBot DZ، شيف جزائري تقترح وصفات تقليدية بناءً على ما يرسله المستخدم من مكونات.\n"
-                    "اقترح وصفة أساسية + وصفات بديلة إن أمكن، مع تقدير السعرات الحرارية، وطريقة التحضير باختصار."
+                    "أنت ChefBot DZ، شيف جزائري. المستخدم يرسل المكونات، وأنت تقترح أكلة جزائرية واحدة فقط،"
+                    "بدون تكرار، مع تقدير السعرات وطريقة مختصرة."
                 )
             elif langue == "fr":
                 system_prompt = (
-                    "Tu es ChefBot DZ, un chef algérien. Tu proposes des recettes DZ selon les ingrédients fournis.\n"
-                    "Propose une recette principale + alternatives, estimation des calories, et brève préparation."
+                    "Tu es ChefBot DZ. Propose UNE seule recette DZ selon les ingrédients, sans te répéter."
+                    "Ajoute une estimation de calories et une brève explication."
                 )
             else:
                 system_prompt = (
-                    "راك شاف جزايري. المستعمل يكتبلك واش كاين عندو. انت تقترح عليه أكلة جزائرية مناسبة،\nمع 2 اختيارات بديلة، والسعرات الحرارية، وطريقة التحضير فـ3 سطور."
+                    "راك شاف جزايري. المستخدم يكتبلك واش كاين. عطيلو غير أكلة وحدة مناسبة،"
+                    "بلا تكرار ولا هدرة بزاف، زيد السعرات وطريقة مختصرة."
                 )
 
             gpt_reply = openai.chat.completions.create(
@@ -97,7 +97,7 @@ def webhook():
                     {"role": "user", "content": user_text}
                 ]
             )
-            result_text = gpt_reply.choices[0].message.content
+            result_text = gpt_reply.choices[0].message.content.strip()
         except Exception as e:
             print(f"[GPT Text Error] {e}")
             result_text = "❌ ماقدرتش نجاوب، جرب تعاود."
@@ -106,30 +106,5 @@ def webhook():
         if langue in ["arabe", "darija"]:
             send_voice(chat_id, result_text, lang_code="ar")
         return "ok"
-
-        # Traitement photo (vision GPT-4)
-        if "photo" in update["message"]:
-            try:
-                file_id = update["message"]["photo"][-1]["file_id"]
-                file_path = get_file_path(file_id)
-                image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-                send_message(chat_id, "📸 تم استلام الصورة! نحاول نفهم واش كاين...")
-
-                vision_response = openai.chat.completions.create(
-                    model="gpt-4-vision-preview",
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": image_url}
-                    ]
-                )
-                result_text = vision_response.choices[0].message.content
-            except Exception as e:
-                print(f"[GPT Vision Error] {e}")
-                result_text = "❌ ماقدرتش نقرا الصورة. جرب وحدة أوضح."
-
-            send_message(chat_id, result_text)
-            if langue in ["arabe", "darija"]:
-                send_voice(chat_id, result_text, lang_code="ar")
-            return "ok"
 
     return "ok"
