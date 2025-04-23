@@ -1,6 +1,5 @@
 from flask import Flask, request
-import os
-import requests
+import os, requests
 
 app = Flask(__name__)
 
@@ -11,12 +10,9 @@ BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     update = request.get_json()
-    print("[PONG TEST] Message reçu :", update)
-
-    if "message" in update:
-        chat_id = update["message"]["chat"]["id"]
-        requests.post(f"{BOT_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": "✅ Pong reçu ! Ton webhook fonctionne parfaitement."
-        })
+    chat_id = update["message"]["chat"]["id"]
+    requests.post(f"{BOT_URL}/sendMessage", json={
+        "chat_id": chat_id,
+        "text": "✅ Pong! Le webhook est connecté correctement."
+    })
     return "ok"
