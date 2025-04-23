@@ -7,6 +7,6 @@ services:
     startCommand: gunicorn app:app
     envVars:
       - key: TELEGRAM_TOKEN
-        value: "8095012022:AAG0WSlBNlF2LIHMpzMhV-rJzpNQfGUdFHU"
+        value: "TON_TOKEN_ICI"
       - key: WEBHOOK_SECRET
         value: "chefbotsecret"
