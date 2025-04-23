@@ -25,17 +25,30 @@ def get_file_path(file_id):
     response = requests.get(f"{BOT_URL}/getFile?file_id={file_id}")
     return response.json()["result"]["file_path"]
 
-def corriger_nom_medicament(mot, dosage=None):
-    candidats = []
+def corriger_nom_medicament_ligne(ligne):
+    mots = ligne.strip().split()
+    if not mots:
+        return ligne
+
+    meilleur_match = None
+    meilleur_score = 0.0
+
     for med in medicaments_db:
         nom = med.get("nom", "").lower()
-        if difflib.SequenceMatcher(None, mot.lower(), nom).ratio() >= 0.75:
-            if dosage:
-                if dosage.lower() in med.get("dosage", "").lower():
-                    return med["nom"]
-            else:
-                return med["nom"]
-    return None
+        for mot in mots:
+            score = difflib.SequenceMatcher(None, mot.lower(), nom).ratio()
+            if score > meilleur_score:
+                meilleur_score = score
+                meilleur_match = med
+
+    if meilleur_score >= 0.75 and meilleur_match:
+        nom_corrige = meilleur_match["nom"].upper()
+        dosage = meilleur_match.get("dosage", "")
+        labo = meilleur_match.get("laboratoire", "")
+        ligne_corrigee = f"💊 {nom_corrige} - {dosage} - {labo}"
+        return ligne_corrigee
+    else:
+        return ligne
 
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
@@ -72,17 +85,10 @@ def webhook():
                 )
                 result_text = vision_response.choices[0].message["content"]
 
-                # 🔎 Correction auto sur base DZ
-                mots = result_text.split()
-                mots_corriges = []
-                for mot in mots:
-                    correction = corriger_nom_medicament(mot)
-                    if correction:
-                        mots_corriges.append(correction.upper())
-                    else:
-                        mots_corriges.append(mot)
-
-                result_text = " ".join(mots_corriges)
+                # 🔎 Correction ligne par ligne sur base DZ
+                lignes = result_text.split("\n")
+                lignes_corrigees = [corriger_nom_medicament_ligne(l) for l in lignes]
+                result_text = "\n".join(lignes_corrigees)
 
             except Exception as e:
                 print(f"Erreur GPT-Vision: {e}")
