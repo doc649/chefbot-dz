@@ -2,16 +2,16 @@ from flask import Flask, request
 import requests
 import os
 import openai
-import easyocr
 import tempfile
+import base64
+import json
 
 app = Flask(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_SECRET = "ordonnasecret"
 BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
-
-reader = easyocr.Reader(['fr', 'en'], gpu=False)
+GOOGLE_VISION_API_KEY = os.getenv("GOOGLE_VISION_API_KEY")
 
 def send_message(chat_id, text):
     requests.post(f"{BOT_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
@@ -19,6 +19,28 @@ def send_message(chat_id, text):
 def get_file_path(file_id):
     response = requests.get(f"{BOT_URL}/getFile?file_id={file_id}")
     return response.json()["result"]["file_path"]
+
+def run_ocr_google_vision(image_path):
+    with open(image_path, "rb") as image_file:
+        content = base64.b64encode(image_file.read()).decode("utf-8")
+
+    vision_url = f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_VISION_API_KEY}"
+    headers = {"Content-Type": "application/json"}
+    body = {
+        "requests": [
+            {
+                "image": {"content": content},
+                "features": [{"type": "TEXT_DETECTION"}]
+            }
+        ]
+    }
+    response = requests.post(vision_url, headers=headers, json=body)
+    result = response.json()
+    try:
+        text = result["responses"][0]["fullTextAnnotation"]["text"]
+    except:
+        text = ""
+    return text
 
 @app.route("/ordonnasecret", methods=["POST"])
 def webhook():
@@ -41,11 +63,10 @@ def webhook():
                     tmp_file.write(response.content)
                     tmp_path = tmp_file.name
 
-                # Lecture avec EasyOCR
-                results = reader.readtext(tmp_path, detail=0)
-                ocr_text = "\n".join(results)
+                # Lecture avec Google Cloud Vision API
+                ocr_text = run_ocr_google_vision(tmp_path)
 
-                # Passage à GPT-3.5 turbo pour résumé pharmacien
+                # Passage à GPT pour résumé pharmacien
                 gpt_response = openai.ChatCompletion.create(
                     model="gpt-3.5-turbo",
                     messages=[
