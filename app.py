@@ -2,12 +2,16 @@ from flask import Flask, request
 import requests
 import os
 import openai
+import easyocr
+import tempfile
 
 app = Flask(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_SECRET = "ordonnasecret"
 BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
+
+reader = easyocr.Reader(['fr', 'en'], gpu=False)
 
 def send_message(chat_id, text):
     requests.post(f"{BOT_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
@@ -31,33 +35,29 @@ def webhook():
             send_message(chat_id, "📥 Ordonnance reçue. Lecture en cours...")
 
             try:
-                vision_response = openai.ChatCompletion.create(
-                    model="gpt-4-turbo",
+                # Téléchargement temporaire de l'image pour OCR
+                response = requests.get(image_url)
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
+                    tmp_file.write(response.content)
+                    tmp_path = tmp_file.name
+
+                # Lecture avec EasyOCR
+                results = reader.readtext(tmp_path, detail=0)
+                ocr_text = "\n".join(results)
+
+                # Passage à GPT-3.5 turbo pour résumé pharmacien
+                gpt_response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
                     messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "text",
-                                    "text": (
-                                        "Lis cette ordonnance manuscrite. Tu es un pharmacien algérien. "
-                                        "Ne donne que les lignes de médicaments. Ignore les dates, noms, signatures. "
-                                        "Donne un résumé clair ligne par ligne."
-                                    )
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url": {"url": image_url, "detail": "high"}
-                                }
-                            ]
-                        }
-                    ],
-                    max_tokens=1000
+                        {"role": "system", "content": "Tu es un pharmacien algérien. Corrige et explique les lignes de prescription suivantes."},
+                        {"role": "user", "content": ocr_text}
+                    ]
                 )
-                result_text = vision_response.choices[0].message["content"]
+                result_text = gpt_response.choices[0].message["content"]
+
             except Exception as e:
-                print(f"Erreur GPT-Vision: {e}")
-                result_text = "❌ Erreur lors de la lecture de l'image."
+                print(f"Erreur OCR ou GPT: {e}")
+                result_text = "❌ Erreur lors de la lecture ou de l'analyse."
 
             send_message(chat_id, result_text)
             return "ok"
