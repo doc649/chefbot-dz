@@ -34,21 +34,21 @@ def corriger_nom_medicament_ligne(ligne):
     meilleur_score = 0.0
 
     for med in medicaments_db:
-        nom = med.get("nom", "").lower()
+        nom_commercial = med.get("nom", "").lower()
         for mot in mots:
-            score = difflib.SequenceMatcher(None, mot.lower(), nom).ratio()
+            score = difflib.SequenceMatcher(None, mot.lower(), nom_commercial).ratio()
             if score > meilleur_score:
                 meilleur_score = score
                 meilleur_match = med
 
-    if meilleur_score >= 0.75 and meilleur_match:
+    if meilleur_score >= 0.85 and meilleur_match:
         nom_corrige = meilleur_match["nom"].upper()
         dosage = meilleur_match.get("dosage", "")
         labo = meilleur_match.get("laboratoire", "")
         ligne_corrigee = f"💊 {nom_corrige} - {dosage} - {labo}"
         return ligne_corrigee
     else:
-        return ligne
+        return f"❓ {ligne}  (non reconnu, vérifie l'écriture)"
 
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
@@ -66,30 +66,36 @@ def webhook():
             send_message(chat_id, "📸 Image reçue. Traitement IA en cours...")
 
             try:
+                noms_medicaments = ", ".join([m['nom'] for m in medicaments_db][:150])
                 vision_response = openai.ChatCompletion.create(
                     model="gpt-4-turbo",
                     messages=[
                         {
                             "role": "user",
                             "content": [
-                                {"type": "text", "text": (
-                                    "Lis cette ordonnance médicale manuscrite et résume uniquement les médicaments, doses et fréquence en 3 lignes maximum. "
-                                    "Ensuite, ajoute une seule phrase finale courte avec un conseil ou alerte si possible (effet secondaire, interaction ou mise en garde). "
-                                    "Ne répète pas d'informations inutiles. Sois rapide, clair et orienté patient."
-                                )},
-                                {"type": "image_url", "image_url": {"url": image_url, "detail": "high"}}
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Lis attentivement cette ordonnance manuscrite. Tu es un pharmacien algérien. "
+                                        "Ne réponds qu'en te basant sur les noms commerciaux des médicaments en Algérie. "
+                                        "Voici une liste de référence : " + noms_medicaments + ". "
+                                        "Résume uniquement les médicaments détectés en format : nom - dose - labo, ligne par ligne. "
+                                        "Ignore les phrases inutiles et les formules de politesse."
+                                    )
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": image_url, "detail": "high"}
+                                }
                             ]
                         }
                     ],
                     max_tokens=750
                 )
                 result_text = vision_response.choices[0].message["content"]
-
-                # 🔎 Correction ligne par ligne sur base DZ
                 lignes = result_text.split("\n")
                 lignes_corrigees = [corriger_nom_medicament_ligne(l) for l in lignes]
                 result_text = "\n".join(lignes_corrigees)
-
             except Exception as e:
                 print(f"Erreur GPT-Vision: {e}")
                 result_text = "❌ Une erreur est survenue pendant l'analyse de l'image."
@@ -97,7 +103,7 @@ def webhook():
             send_message(chat_id, result_text)
             return "ok"
 
-        # 📟 Texte normal (non image)
+        # 📱 Texte normal (non image)
         user_text = update["message"].get("text", "")
         if user_text:
             message_clean = user_text.lower().strip()
@@ -115,7 +121,7 @@ def webhook():
             elif message_clean == "/langue_dz": user_langs[chat_id] = "dz"; send_message(chat_id, "✅ Darija activé")
             elif message_clean == "/langue_ar": user_langs[chat_id] = "ar"; send_message(chat_id, "✅ تم تغيير اللغة")
 
-            # 🔠 GPT classique pour le texte
+            # 🔤 GPT classique pour le texte
             langue = user_langs.get(chat_id, "fr")
             if langue == "dz":
                 prompt = "Réponds en darija DZ claire et courte."
