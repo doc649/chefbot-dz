@@ -139,9 +139,9 @@ def webhook():
             send_message(chat_id, "📥 Ordonnance reçue. Lecture en cours...")
 
             try:
-                noms_medicaments = ", ".join([m['nom'] for m in medicaments_db][:150])
+                noms_medicaments = ", ".join([m['nom'] for m in medicaments_db if 'nom' in m][:150])
                 vision_response = openai.ChatCompletion.create(
-                    model="gpt-4-turbo",
+                    model="gpt-4-vision-preview",
                     messages=[
                         {
                             "role": "user",
