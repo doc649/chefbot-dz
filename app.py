@@ -57,24 +57,21 @@ def webhook():
             send_message(chat_id, "📥 Ordonnance reçue. Lecture en cours...")
 
             try:
-                # Téléchargement temporaire de l'image pour OCR
                 response = requests.get(image_url)
                 with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp_file:
                     tmp_file.write(response.content)
                     tmp_path = tmp_file.name
 
-                # Lecture avec Google Cloud Vision API
                 ocr_text = run_ocr_google_vision(tmp_path)
 
-                # Passage à GPT pour résumé pharmacien
-                gpt_response = openai.ChatCompletion.create(
+                gpt_response = openai.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": "Tu es un pharmacien algérien. Corrige et explique les lignes de prescription suivantes."},
                         {"role": "user", "content": ocr_text}
                     ]
                 )
-                result_text = gpt_response.choices[0].message["content"]
+                result_text = gpt_response.choices[0].message.content
 
             except Exception as e:
                 print(f"Erreur OCR ou GPT: {e}")
@@ -88,14 +85,14 @@ def webhook():
             send_message(chat_id, "📥 Texte reçu. Analyse...")
             prompt = "Tu es un pharmacien algérien. Donne une explication claire et concise du médicament mentionné."
             try:
-                response = openai.ChatCompletion.create(
+                response = openai.chat.completions.create(
                     model="gpt-3.5-turbo",
                     messages=[
                         {"role": "system", "content": prompt},
                         {"role": "user", "content": user_text}
                     ]
                 )
-                gpt_reply = response.choices[0].message["content"]
+                gpt_reply = response.choices[0].message.content
             except Exception as e:
                 print(f"Erreur GPT Texte: {e}")
                 gpt_reply = "❌ Erreur lors du traitement du texte."
