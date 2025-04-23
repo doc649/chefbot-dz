@@ -1,6 +1,4 @@
 Flask
 requests
 openai
-easyocr
-torch==2.0.1
 gunicorn
