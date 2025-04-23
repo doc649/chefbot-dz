@@ -5,27 +5,30 @@ import openai
 
 app = Flask(__name__)
 
-# Configuration des variables d'environnement
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "chefbotsecret")
 BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# Mémoire simple des langues par session (en RAM, pas persisté)
+ADMIN_ID = os.getenv("ADMIN_ID", "866358358")
+
 user_languages = {}
-# Mémoire temporaire pour éviter répétition
 recent_users = {}
+stop_flags = set()
+user_state = {}
 
-# Envoi d'un message Telegram
 
-def send_message(chat_id, text):
-    requests.post(f"{BOT_URL}/sendMessage", json={"chat_id": chat_id, "text": text})
+def send_message(chat_id, text, reply_markup=None):
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    requests.post(f"{BOT_URL}/sendMessage", json=payload)
 
-# Envoi d'un message vocal Telegram (via gtts)
+
 def send_voice(chat_id, text, lang_code="ar"):
     from gtts import gTTS
     from io import BytesIO
-    text = text.replace("\n", ". ")[:400]  # Limiter la longueur et répétition
+    text = text.replace("\n", ". ")[:400]
     audio = gTTS(text=text, lang=lang_code)
     mp3_fp = BytesIO()
     audio.write_to_fp(mp3_fp)
@@ -33,85 +36,124 @@ def send_voice(chat_id, text, lang_code="ar"):
     files = {"voice": ("voice.ogg", mp3_fp, "audio/ogg")}
     requests.post(f"{BOT_URL}/sendVoice", data={"chat_id": chat_id}, files=files)
 
-# Récupération de l'image Telegram
+
 def get_file_path(file_id):
     response = requests.get(f"{BOT_URL}/getFile?file_id={file_id}")
     return response.json()["result"]["file_path"]
 
-# Webhook principal
+
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     update = request.get_json()
     print("[ChefBot DZ] Reçu:", update)
 
     if "message" in update:
-        chat_id = update["message"]["chat"]["id"]
+        chat_id = str(update["message"]["chat"]["id"])
         user_text = update["message"].get("text", "").strip()
 
-        # Bloquer si trop de messages similaires
+        if user_text.lower() == "/stop" and chat_id == ADMIN_ID:
+            stop_flags.add(chat_id)
+            send_message(chat_id, "✅ Réponses automatiques désactivées.")
+            return "ok"
+
+        if user_text.lower() == "/resume" and chat_id == ADMIN_ID:
+            stop_flags.discard(chat_id)
+            send_message(chat_id, "🔄 Réponses automatiques réactivées.")
+            return "ok"
+
+        if chat_id in stop_flags:
+            return "ok"
+
         if recent_users.get(chat_id) == user_text:
             return "ok"
         recent_users[chat_id] = user_text
 
-        # Commande de langue
         if user_text.lower() in ["/lang_dz", "darija"]:
             user_languages[chat_id] = "darija"
-            send_message(chat_id, "✅ تم تغيير اللغة إلى الدارجة الجزائرية")
+            send_message(chat_id, "✅ تم تغيير اللغة إلى الدارجة الجزائرية 🇩🇿")
             return "ok"
         elif user_text.lower() in ["/lang_ar", "arabe"]:
             user_languages[chat_id] = "arabe"
-            send_message(chat_id, "✅ تم تغيير اللغة إلى العربية")
+            send_message(chat_id, "✅ تم تغيير اللغة إلى العربية 🇩🇿")
             return "ok"
         elif user_text.lower() in ["/lang_fr", "français"]:
             user_languages[chat_id] = "fr"
-            send_message(chat_id, "✅ Langue changée : Français")
+            send_message(chat_id, "✅ Langue changée : Français 🇩🇿")
             return "ok"
 
-        # Message d'accueil
         if user_text.lower() in ["/start", "start"]:
             accueil = (
-                "🌟 *مرحبا بك في ChefBot DZ !* 🌟\n\n"
+                "🇩🇿 *مرحبا بك في ChefBot DZ !* 🇩🇿\n\n"
                 "📸 صورلي الثلاجة تاعك، ولا 🗣️ كتبلي واش كاين عندك فالدار،\nباش نقترح عليك أكلة جزائرية مناسبة.\n\n"
-                "🍽️ نعطيك وصفة رئيسية فقط + السعرات + طريقة التحضير مبسطة.\n"
-                "🌐 اللغات المتاحة: /lang_dz (الدارجة), /lang_ar (العربية), /lang_fr (فرنسية)"
+                "🍽️ نعطيك 3 اقتراحات لأكلات DZ، واختر واحدة باش نرسللك طريقتها.\n"
+                "🌐 اللغات المتاحة: /lang_dz (الدارجة), /lang_ar (العربية), /lang_fr (فرançaise)"
             )
             send_message(chat_id, accueil)
             return "ok"
 
         langue = user_languages.get(chat_id, "darija")
 
+        if chat_id in user_state:
+            plat_choisi = user_text.strip()
+            selected = user_state.pop(chat_id)
+            try:
+                prompt = (
+                    f"راك شاف جزايري. المستخدم اختار {plat_choisi} من بين {selected}."
+                    f"اشرح كيفاش يحضرها بطريقة مبسطة ومباشرة، بلا هدرة زايدة."
+                )
+                gpt_reply = openai.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": plat_choisi}
+                    ]
+                )
+                result_text = gpt_reply.choices[0].message.content.strip()
+                send_message(chat_id, result_text)
+                if langue in ["arabe", "darija"]:
+                    send_voice(chat_id, result_text, lang_code="ar")
+                return "ok"
+            except Exception as e:
+                print(f"[GPT Recipe Error] {e}")
+                send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
+                return "ok"
+
         try:
             if langue == "arabe":
-                system_prompt = (
-                    "أنت ChefBot DZ، شيف جزائري. أعطي للمستخدم وصفة جزائرية واحدة مناسبة لما أرسله من مكونات،"
-                    "بشكل مختصر جدًا دون تكرار أو معلومات غير ضرورية."
+                prompt = (
+                    "أنت ChefBot DZ، شيف جزائري. أعط فقط 3 اقتراحات لأكلات جزائرية مشهورة حسب مكونات المستخدم،"
+                    "بدون شرح أو تفاصيل. فقط الأسماء مفصولة بسطر جديد."
                 )
             elif langue == "fr":
-                system_prompt = (
-                    "Tu es ChefBot DZ. Donne une seule recette DZ courte et claire basée sur les ingrédients reçus."
-                    "Pas de répétition ni blabla inutile. Ajoute juste les calories et comment faire."
+                prompt = (
+                    "Tu es ChefBot DZ. Propose 3 plats DZ en fonction des ingrédients, sans explication, juste les noms."
                 )
             else:
-                system_prompt = (
-                    "راك شاف جزايري. المستعمل يكتبلك واش عندو فالدار. عطيلو غير وصفة وحدة بلا هدرة بزاف،"
-                    "زيد شوية سعرات وطريقة خفيفة وخلاص."
+                prompt = (
+                    "راك شاف جزايري. عطي فقط 3 أسماء تاع وجبات DZ لي تصلح حسب المكونات. بلا شرح ولا هدرة زايدة."
                 )
 
             gpt_reply = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": system_prompt},
+                    {"role": "system", "content": prompt},
                     {"role": "user", "content": user_text}
                 ]
             )
-            result_text = gpt_reply.choices[0].message.content.strip()
+            plats = gpt_reply.choices[0].message.content.strip()
+            user_state[chat_id] = plats
+            keyboard = {
+                "keyboard": [[{"text": f"🍽️ {p.strip()}"}] for p in plats.split("\n") if p.strip()],
+                "resize_keyboard": True,
+                "one_time_keyboard": True
+            }
+            send_message(
+                chat_id,
+                f"👨‍🍳 🇩🇿 *اقتراحاتي:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.",
+                reply_markup=keyboard
+            )
         except Exception as e:
-            print(f"[GPT Text Error] {e}")
-            result_text = "❌ ماقدرتش نجاوب، جرب تعاود."
-
-        send_message(chat_id, result_text)
-        if langue in ["arabe", "darija"]:
-            send_voice(chat_id, result_text, lang_code="ar")
-        return "ok"
+            print(f"[GPT Suggestion Error] {e}")
+            send_message(chat_id, "❌ ماقدرتش نجاوب، جرب تعاود.")
 
     return "ok"
