@@ -8,7 +8,7 @@ import difflib
 app = Flask(__name__)
 
 TOKEN = os.getenv("TELEGRAM_TOKEN")
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "ordonnasecret")
+WEBHOOK_SECRET = "ordonnasecret"
 BOT_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 # 🌐 Stockage temporaire des langues utilisateur
@@ -125,3 +125,10 @@ def corriger_nom_medicament_ligne(ligne):
         return ligne_corrigee
     else:
         return f"❓ {ligne}  (non reconnu, vérifie l'écriture)"
+
+@app.route("/ordonnasecret", methods=["POST"])
+def webhook():
+    update = request.get_json()
+    print(update)
+    send_message(update["message"]["chat"]["id"], "📥 Ordonnance reçue. Traitement en cours...")
+    return "ok"
