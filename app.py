@@ -25,7 +25,7 @@ def send_message(chat_id, text):
 def send_voice(chat_id, text, lang_code="ar"):
     from gtts import gTTS
     from io import BytesIO
-    text = text.replace("\n", ". ")[:400]  # Limiter les répétitions et la longueur
+    text = text.replace("\n", ". ")[:400]  # Limiter la longueur et répétition
     audio = gTTS(text=text, lang=lang_code)
     mp3_fp = BytesIO()
     audio.write_to_fp(mp3_fp)
@@ -48,6 +48,11 @@ def webhook():
         chat_id = update["message"]["chat"]["id"]
         user_text = update["message"].get("text", "").strip()
 
+        # Bloquer si trop de messages similaires
+        if recent_users.get(chat_id) == user_text:
+            return "ok"
+        recent_users[chat_id] = user_text
+
         # Commande de langue
         if user_text.lower() in ["/lang_dz", "darija"]:
             user_languages[chat_id] = "darija"
@@ -67,7 +72,7 @@ def webhook():
             accueil = (
                 "🌟 *مرحبا بك في ChefBot DZ !* 🌟\n\n"
                 "📸 صورلي الثلاجة تاعك، ولا 🗣️ كتبلي واش كاين عندك فالدار،\nباش نقترح عليك أكلة جزائرية مناسبة.\n\n"
-                "🍽️ نعطيك وصفة رئيسية + بدائل + السعرات + طريقة التحضير مبسطة.\n"
+                "🍽️ نعطيك وصفة رئيسية فقط + السعرات + طريقة التحضير مبسطة.\n"
                 "🌐 اللغات المتاحة: /lang_dz (الدارجة), /lang_ar (العربية), /lang_fr (فرنسية)"
             )
             send_message(chat_id, accueil)
@@ -75,26 +80,21 @@ def webhook():
 
         langue = user_languages.get(chat_id, "darija")
 
-        # Ne pas répondre plusieurs fois au même message
-        if recent_users.get(chat_id) == user_text:
-            return "ok"
-        recent_users[chat_id] = user_text
-
         try:
             if langue == "arabe":
                 system_prompt = (
-                    "أنت ChefBot DZ، شيف جزائري. المستخدم يرسل المكونات، وأنت تقترح أكلة جزائرية واحدة فقط،"
-                    "بدون تكرار، مع تقدير السعرات وطريقة مختصرة."
+                    "أنت ChefBot DZ، شيف جزائري. أعطي للمستخدم وصفة جزائرية واحدة مناسبة لما أرسله من مكونات،"
+                    "بشكل مختصر جدًا دون تكرار أو معلومات غير ضرورية."
                 )
             elif langue == "fr":
                 system_prompt = (
-                    "Tu es ChefBot DZ. Propose UNE seule recette DZ selon les ingrédients, sans te répéter."
-                    "Ajoute une estimation de calories et une brève explication."
+                    "Tu es ChefBot DZ. Donne une seule recette DZ courte et claire basée sur les ingrédients reçus."
+                    "Pas de répétition ni blabla inutile. Ajoute juste les calories et comment faire."
                 )
             else:
                 system_prompt = (
-                    "راك شاف جزايري. المستخدم يكتبلك واش كاين. عطيلو غير أكلة وحدة مناسبة،"
-                    "بلا تكرار ولا هدرة بزاف، زيد السعرات وطريقة مختصرة."
+                    "راك شاف جزايري. المستعمل يكتبلك واش عندو فالدار. عطيلو غير وصفة وحدة بلا هدرة بزاف،"
+                    "زيد شوية سعرات وطريقة خفيفة وخلاص."
                 )
 
             gpt_reply = openai.chat.completions.create(
