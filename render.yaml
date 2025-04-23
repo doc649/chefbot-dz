@@ -1,12 +1,12 @@
 services:
   - type: web
-    name: ordonnabot-dz
+    name: chefbot-dz
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
     envVars:
       - key: TELEGRAM_TOKEN
-        value: "TON_TOKEN_ICI"
+        value: "8095012022:AAG0WSlBNlF2LIHMpzMhV-rJzpNQfGUdFHU"
       - key: WEBHOOK_SECRET
-        value: "ordonnasecret"
+        value: "chefbotsecret"
