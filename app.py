@@ -141,7 +141,7 @@ def webhook():
             try:
                 noms_medicaments = ", ".join([m['nom'] for m in medicaments_db if 'nom' in m][:150])
                 vision_response = openai.ChatCompletion.create(
-                    model="gpt-4-vision-preview",
+                    model="gpt-4-turbo",
                     messages=[
                         {
                             "role": "user",
