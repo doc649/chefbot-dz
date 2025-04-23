@@ -2,6 +2,7 @@ from flask import Flask, request
 import os
 import requests
 import openai
+import json
 
 app = Flask(__name__)
 
@@ -19,9 +20,13 @@ user_state = {}
 
 
 def send_message(chat_id, text, reply_markup=None):
-    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
+    payload = {
+        "chat_id": chat_id,
+        "text": text,
+        "parse_mode": "Markdown"
+    }
     if reply_markup:
-        payload["reply_markup"] = reply_markup
+        payload["reply_markup"] = json.dumps(reply_markup)
     requests.post(f"{BOT_URL}/sendMessage", json=payload)
 
 
@@ -64,10 +69,6 @@ def webhook():
         if chat_id in stop_flags:
             return "ok"
 
-        if recent_users.get(chat_id) == user_text:
-            return "ok"
-        recent_users[chat_id] = user_text
-
         if user_text.lower() in ["/lang_dz", "darija"]:
             user_languages[chat_id] = "darija"
             send_message(chat_id, "✅ تم تغيير اللغة إلى الدارجة الجزائرية 🇩🇿")
@@ -81,7 +82,7 @@ def webhook():
             send_message(chat_id, "✅ Langue changée : Français 🇩🇿")
             return "ok"
 
-        if user_text.lower() in ["/start", "start"]:
+        if user_text.lower() == "/start" and chat_id == ADMIN_ID:
             accueil = (
                 "🇩🇿 *مرحبا بك في ChefBot DZ !* 🇩🇿\n\n"
                 "📸 صورلي الثلاجة تاعك، ولا 🗣️ كتبلي واش كاين عندك فالدار،\nباش نقترح عليك أكلة جزائرية مناسبة.\n\n"
@@ -94,12 +95,11 @@ def webhook():
         langue = user_languages.get(chat_id, "darija")
 
         if chat_id in user_state:
-            plat_choisi = user_text.strip()
+            plat_choisi = user_text.strip().replace("🍽️ ", "")
             selected = user_state.pop(chat_id)
             try:
                 prompt = (
-                    f"راك شاف جزايري. المستخدم اختار {plat_choisi} من بين {selected}."
-                    f"اشرح كيفاش يحضرها بطريقة مبسطة ومباشرة، بلا هدرة زايدة."
+                    f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة."
                 )
                 gpt_reply = openai.chat.completions.create(
                     model="gpt-3.5-turbo",
@@ -119,19 +119,11 @@ def webhook():
                 return "ok"
 
         try:
-            if langue == "arabe":
-                prompt = (
-                    "أنت ChefBot DZ، شيف جزائري. أعط فقط 3 اقتراحات لأكلات جزائرية مشهورة حسب مكونات المستخدم،"
-                    "بدون شرح أو تفاصيل. فقط الأسماء مفصولة بسطر جديد."
-                )
-            elif langue == "fr":
-                prompt = (
-                    "Tu es ChefBot DZ. Propose 3 plats DZ en fonction des ingrédients, sans explication, juste les noms."
-                )
-            else:
-                prompt = (
-                    "راك شاف جزايري. عطي فقط 3 أسماء تاع وجبات DZ لي تصلح حسب المكونات. بلا شرح ولا هدرة زايدة."
-                )
+            prompt = {
+                "darija": "راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء.",
+                "arabe": "أنت شاف جزائري. المكونات المعطاة: {ingredients}. أعط 3 أطباق DZ واقعية ومناسبة فقط، دون شرح، فقط الأسماء.",
+                "fr": "Tu es un chef algérien. Voici les ingrédients: {ingredients}. Donne seulement 3 plats DZ vraiment réalisables avec, sans détails."
+            }[langue].format(ingredients=user_text)
 
             gpt_reply = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -149,7 +141,10 @@ def webhook():
             }
             send_message(
                 chat_id,
-                f"👨‍🍳 🇩🇿 *اقتراحاتي:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.",
+                f"👨‍🍳 🇩🇿 *اقتراحاتي:*
+{plats}
+
+✅ اضغط على اسم الطبق باش نبعثلك الطريقة.",
                 reply_markup=keyboard
             )
         except Exception as e:
