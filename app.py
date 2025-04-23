@@ -98,7 +98,6 @@ def corriger_nom_medicament_ligne(ligne):
         nom_commercial = med.get("nom", "").lower()
         for mot in mots:
             mot_normalise = abreviations.get(mot.lower(), mot.lower())
-            # correction auto basique : si une lettre est enlevée ou mal tapée
             if len(mot_normalise) > 3:
                 if mot_normalise in nom_commercial:
                     score = 1.0
@@ -116,7 +115,6 @@ def corriger_nom_medicament_ligne(ligne):
         dosage = meilleur_match.get("dosage", "")
         labo = meilleur_match.get("laboratoire", "")
 
-        # Remplacement des formes posologiques abrégées
         ligne_dosage = " ".join([
             abreviations_dosage.get(m.lower(), m) for m in mots if m.lower() in abreviations_dosage
         ])
@@ -130,5 +128,69 @@ def corriger_nom_medicament_ligne(ligne):
 def webhook():
     update = request.get_json()
     print(update)
-    send_message(update["message"]["chat"]["id"], "📥 Ordonnance reçue. Traitement en cours...")
+
+    if "message" in update:
+        chat_id = update["message"]["chat"]["id"]
+
+        if "photo" in update["message"]:
+            file_id = update["message"]["photo"][-1]["file_id"]
+            file_path = get_file_path(file_id)
+            image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+            send_message(chat_id, "📥 Ordonnance reçue. Lecture en cours...")
+
+            try:
+                noms_medicaments = ", ".join([m['nom'] for m in medicaments_db][:150])
+                vision_response = openai.ChatCompletion.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Lis cette ordonnance manuscrite. Tu es un pharmacien algérien. "
+                                        "Ne donne que les lignes de médicaments. Ignore les dates, noms, signatures. "
+                                        "Base-toi sur cette liste : " + noms_medicaments + ". "
+                                        "Donne la réponse ligne par ligne."
+                                    )
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {"url": image_url, "detail": "high"}
+                                }
+                            ]
+                        }
+                    ],
+                    max_tokens=750
+                )
+                result_text = vision_response.choices[0].message["content"]
+                lignes = result_text.split("\n")
+                lignes_corrigees = [corriger_nom_medicament_ligne(l) for l in lignes]
+                result_text = "\n".join(lignes_corrigees)
+            except Exception as e:
+                print(f"Erreur GPT-Vision: {e}")
+                result_text = "❌ Erreur lors de la lecture de l'image."
+
+            send_message(chat_id, result_text)
+            return "ok"
+
+        user_text = update["message"].get("text", "")
+        if user_text:
+            send_message(chat_id, "📥 Texte reçu. Analyse...")
+            prompt = "Tu es un pharmacien algérien. Donne une explication courte et claire."
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": user_text}
+                    ]
+                )
+                gpt_reply = response.choices[0].message["content"]
+            except Exception as e:
+                print(f"Erreur GPT Texte: {e}")
+                gpt_reply = "❌ Erreur lors du traitement du texte."
+            send_message(chat_id, gpt_reply)
+
     return "ok"
