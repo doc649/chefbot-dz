@@ -19,7 +19,6 @@ stop_flags = set()
 user_state = {}
 last_response_sent = {}
 
-
 def send_message(chat_id, text, reply_markup=None):
     payload = {
         "chat_id": chat_id,
@@ -29,7 +28,6 @@ def send_message(chat_id, text, reply_markup=None):
     if reply_markup:
         payload["reply_markup"] = json.dumps(reply_markup)
     requests.post(f"{BOT_URL}/sendMessage", json=payload)
-
 
 def send_voice(chat_id, text, lang_code="ar"):
     from gtts import gTTS
@@ -42,110 +40,92 @@ def send_voice(chat_id, text, lang_code="ar"):
     files = {"voice": ("voice.ogg", mp3_fp, "audio/ogg")}
     requests.post(f"{BOT_URL}/sendVoice", data={"chat_id": chat_id}, files=files)
 
-
 def get_file_path(file_id):
     response = requests.get(f"{BOT_URL}/getFile?file_id={file_id}")
     return response.json()["result"]["file_path"]
 
+def download_file(file_path):
+    url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+    response = requests.get(url)
+    return response.content
+
+def transcribe_audio(file_bytes):
+    import tempfile
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".ogg") as temp_audio:
+        temp_audio.write(file_bytes)
+        temp_audio_path = temp_audio.name
+    with open(temp_audio_path, "rb") as audio_file:
+        transcript = openai.Audio.transcribe("whisper-1", audio_file)
+        return transcript["text"]
 
 @app.route(f"/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     update = request.get_json()
     print("[ChefBot DZ] Reçu:", update)
 
+        # Exemple de réponse multilignes corrigée
+        if text == "test_multiligne":
+            send_message(chat_id, (
+                "👨‍🍳 🇩🇿 *اقتراحاتي حسب المكونات المكتوبة:*
+"
+                "1. شربة فريك
+"
+                "2. بطاطا في الفور
+"
+                "3. كسكسي بالخضرة
+"
+                "✅ اضغط على اسم الطبق باش نبعثلك الطريقة."
+            ))
+            return "ok"
+
     if "message" in update:
         chat_id = str(update["message"]["chat"]["id"])
         text = update["message"].get("text", "").strip()
 
-        if text:
-            try:
-                suggestion_prompt = f"راك شاف جزايري. المستخدم عطاك هذه القائمة: {text}. عطي غير 3 اقتراحات متنوعة ومختلفة لوجبات DZ الممكنة فعليًا، بلا تكرار ولا شرح، فقط الاسماء."
-                suggestion_reply = openai.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[
-                        {"role": "system", "content": suggestion_prompt},
-                        {"role": "user", "content": text}
-                    ]
-                )
-                plats = suggestion_reply.choices[0].message.content.strip()
-                plats_list = list(dict.fromkeys([p.strip() for p in plats.split("\n") if p.strip()]))[:3]
-                keyboard = {
-                    "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in plats_list] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
-                }
-                user_state[chat_id] = plats_list
-                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب المكونات المكتوبة:*
-" + "\n".join(plats_list) + "\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
-            except Exception as e:
-                print(f"Erreur GPT Texte: {e}")
-                send_message(chat_id, "❌ ماقدرتش نقترح عليك وصفات.")
+        if text.startswith("/forcer_reset") and chat_id == ADMIN_ID:
+            last_response_sent.pop(chat_id, None)
+            send_message(chat_id, "✅ Cache utilisateur réinitialisé.")
             return "ok"
 
-        if "photo" in update["message"]:
-            file_id = update["message"]["photo"][-1]["file_id"]
-            file_path = get_file_path(file_id)
-            image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-
-            try:
-                vision_response = openai.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[
-                        {"role": "system", "content": "Tu es un expert en cuisine DZ. Donne uniquement la liste des ingrédients visibles dans cette image, en arabe algérien, sans explication."},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": "Voici l'image de mon frigo ou des ingrédients."},
-                            {"type": "image_url", "image_url": {"url": image_url}}
-                        ]}
-                    ]
-                )
-                ingredients_detected = vision_response.choices[0].message.content.strip()
-                send_message(chat_id, f"📸 *المكونات المستخرجة من الصورة:*\n{ingredients_detected}")
-
-                suggestion_prompt = f"راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients_detected}. عطي غير 3 اقتراحات متنوعة ومختلفة لوجبات DZ الممكنة فعليًا، بلا تكرار ولا شرح، فقط الاسماء."
-                suggestion_reply = openai.chat.completions.create(
-                    model="gpt-4-turbo",
-                    messages=[
-                        {"role": "system", "content": suggestion_prompt},
-                        {"role": "user", "content": ingredients_detected}
-                    ]
-                )
-                plats = suggestion_reply.choices[0].message.content.strip()
-                plats_list = list(dict.fromkeys([p.strip() for p in plats.split("\n") if p.strip()]))[:3]
-                keyboard = {
-                    "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in plats_list] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
-                }
-                user_state[chat_id] = plats_list
-                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب الصورة:*\n" + "\n".join(plats_list) + "\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
-
-            except Exception as e:
-                print(f"Erreur GPT-Vision: {e}")
-                send_message(chat_id, "❌ ماقدرتش نقرأ الصورة.")
+        if text.startswith("/stop") and chat_id == ADMIN_ID:
+            stop_flags.add(chat_id)
+            send_message(chat_id, "🛑 Réponses du bot suspendues pour cet utilisateur.")
             return "ok"
+
+        if text.startswith("/voice"):
+            # Admin or user triggers a voice reply of the last sent text
+            last_text = last_response_sent.get(chat_id)
+            if last_text:
+                send_voice(chat_id, last_text, lang_code="ar")
+                send_message(chat_id, "🔊 Voici la version vocale de la recette !")
+            else:
+                send_message(chat_id, "ℹ️ Aucune réponse récente à lire.")
+            return "ok"
+
+        if chat_id in stop_flags:
+            return "ok"
+
+        if "voice" in update["message"]:
+            file_id = update["message"]["voice"]["file_id"]
+            try:
+                file_path = get_file_path(file_id)
+                file_bytes = download_file(file_path)
+                transcribed_text = transcribe_audio(file_bytes)
+                send_message(chat_id, f"🗣️ *Texte reconnu:* {transcribed_text}")
+                update["message"]["text"] = transcribed_text  # Inject the transcribed text
+                update["message"].pop("voice", None)
+                return webhook()  # Relancer le traitement avec le texte injecté
+            except Exception as e:
+                print("[Erreur transcription]", e)
+                send_message(chat_id, "❌ Échec de la reconnaissance vocale.")
+                return "ok"
 
     if "callback_query" in update:
         query = update["callback_query"]
         chat_id = str(query["message"]["chat"]["id"])
         plat_choisi = query["data"]
 
-        if plat_choisi == "autres":
-            send_message(chat_id, "🔁 عاود كتبلي واش كاين عندك فالثلاجة من جديد.")
+        if chat_id in stop_flags:
             return "ok"
-
-        if last_response_sent.get(chat_id) == plat_choisi:
-            return "ok"
-
-        try:
-            prompt = f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة. ثم أعط تقدير تقريبي للسعرات الحرارية الكاملة لهذا الطبق."
-            gpt_reply = openai.chat.completions.create(
-                model="gpt-4-turbo",
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": plat_choisi}
-                ]
-            )
-            result_text = gpt_reply.choices[0].message.content.strip()
-            send_message(chat_id, result_text)
-            last_response_sent[chat_id] = plat_choisi
-        except Exception as e:
-            print(f"[GPT Inline Error] {e}")
-            send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
 
     return "ok"
