@@ -55,6 +55,30 @@ def webhook():
 
     if "message" in update:
         chat_id = str(update["message"]["chat"]["id"])
+        text = update["message"].get("text", "").strip()
+
+        if text:
+            try:
+                suggestion_prompt = f"راك شاف جزايري. المستخدم عطاك هذه القائمة: {text}. عطي غير 3 اقتراحات متنوعة ومختلفة لوجبات DZ الممكنة فعليًا، بلا تكرار ولا شرح، فقط الاسماء."
+                suggestion_reply = openai.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": suggestion_prompt},
+                        {"role": "user", "content": text}
+                    ]
+                )
+                plats = suggestion_reply.choices[0].message.content.strip()
+                plats_list = list(dict.fromkeys([p.strip() for p in plats.split("\n") if p.strip()]))[:3]
+                keyboard = {
+                    "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in plats_list] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
+                }
+                user_state[chat_id] = plats_list
+                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب المكونات المكتوبة:*
+" + "\n".join(plats_list) + "\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
+            except Exception as e:
+                print(f"Erreur GPT Texte: {e}")
+                send_message(chat_id, "❌ ماقدرتش نقترح عليك وصفات.")
+            return "ok"
 
         if "photo" in update["message"]:
             file_id = update["message"]["photo"][-1]["file_id"]
