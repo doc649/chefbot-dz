@@ -17,6 +17,7 @@ user_languages = {}
 recent_users = {}
 stop_flags = set()
 user_state = {}
+last_response_sent = {}
 
 
 def send_message(chat_id, text, reply_markup=None):
@@ -74,7 +75,7 @@ def webhook():
                 ingredients_detected = vision_response.choices[0].message.content.strip()
                 send_message(chat_id, f"📸 *المكونات المستخرجة من الصورة:*\n{ingredients_detected}")
 
-                suggestion_prompt = f"راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients_detected}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء."
+                suggestion_prompt = f"راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients_detected}. عطي غير 3 اقتراحات متنوعة ومختلفة لوجبات DZ الممكنة فعليًا، بلا تكرار ولا شرح، فقط الاسماء."
                 suggestion_reply = openai.chat.completions.create(
                     model="gpt-4-turbo",
                     messages=[
@@ -83,11 +84,12 @@ def webhook():
                     ]
                 )
                 plats = suggestion_reply.choices[0].message.content.strip()
+                plats_list = list(dict.fromkeys([p.strip() for p in plats.split("\n") if p.strip()]))[:3]
                 keyboard = {
-                    "inline_keyboard": [[{"text": f"🍽️ {p.strip()}", "callback_data": p.strip()}] for p in plats.split("\n") if p.strip()] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
+                    "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in plats_list] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
                 }
-                user_state[chat_id] = plats.split("\n")
-                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب الصورة:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
+                user_state[chat_id] = plats_list
+                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب الصورة:*\n" + "\n".join(plats_list) + "\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
 
             except Exception as e:
                 print(f"Erreur GPT-Vision: {e}")
@@ -103,6 +105,9 @@ def webhook():
             send_message(chat_id, "🔁 عاود كتبلي واش كاين عندك فالثلاجة من جديد.")
             return "ok"
 
+        if last_response_sent.get(chat_id) == plat_choisi:
+            return "ok"
+
         try:
             prompt = f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة. ثم أعط تقدير تقريبي للسعرات الحرارية الكاملة لهذا الطبق."
             gpt_reply = openai.chat.completions.create(
@@ -114,6 +119,7 @@ def webhook():
             )
             result_text = gpt_reply.choices[0].message.content.strip()
             send_message(chat_id, result_text)
+            last_response_sent[chat_id] = plat_choisi
         except Exception as e:
             print(f"[GPT Inline Error] {e}")
             send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
