@@ -94,30 +94,6 @@ def webhook():
 
         langue = user_languages.get(chat_id, "darija")
 
-        if chat_id in user_state:
-            plat_choisi = user_text.strip().replace("🍽️ ", "")
-            selected = user_state.pop(chat_id)
-            try:
-                prompt = (
-                    f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة."
-                )
-                gpt_reply = openai.chat.completions.create(
-                    model="gpt-3.5-turbo",
-                    messages=[
-                        {"role": "system", "content": prompt},
-                        {"role": "user", "content": plat_choisi}
-                    ]
-                )
-                result_text = gpt_reply.choices[0].message.content.strip()
-                send_message(chat_id, result_text)
-                if langue in ["arabe", "darija"]:
-                    send_voice(chat_id, result_text, lang_code="ar")
-                return "ok"
-            except Exception as e:
-                print(f"[GPT Recipe Error] {e}")
-                send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
-                return "ok"
-
         try:
             prompt = {
                 "darija": "راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء.",
@@ -133,11 +109,9 @@ def webhook():
                 ]
             )
             plats = gpt_reply.choices[0].message.content.strip()
-            user_state[chat_id] = plats
+            user_state[chat_id] = [p.strip() for p in plats.split("\n") if p.strip()]
             keyboard = {
-                "keyboard": [[{"text": f"🍽️ {p.strip()}"}] for p in plats.split("\n") if p.strip()],
-                "resize_keyboard": True,
-                "one_time_keyboard": True
+                "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in user_state[chat_id]] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
             }
             send_message(
                 chat_id,
@@ -147,5 +121,29 @@ def webhook():
         except Exception as e:
             print(f"[GPT Suggestion Error] {e}")
             send_message(chat_id, "❌ ماقدرتش نجاوب، جرب تعاود.")
+
+    elif "callback_query" in update:
+        query = update["callback_query"]
+        chat_id = str(query["message"]["chat"]["id"])
+        plat_choisi = query["data"]
+
+        if plat_choisi == "autres":
+            send_message(chat_id, "🔁 عاود كتبلي واش كاين عندك فالثلاجة من جديد.")
+            return "ok"
+
+        try:
+            prompt = f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة. ثم أعط تقدير تقريبي للسعرات الحرارية الكاملة لهذا الطبق."
+            gpt_reply = openai.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": plat_choisi}
+                ]
+            )
+            result_text = gpt_reply.choices[0].message.content.strip()
+            send_message(chat_id, result_text)
+        except Exception as e:
+            print(f"[GPT Inline Error] {e}")
+            send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
 
     return "ok"
