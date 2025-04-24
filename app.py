@@ -55,7 +55,6 @@ def webhook():
     if "message" in update:
         chat_id = str(update["message"]["chat"]["id"])
 
-        # ✅ Gestion de photo avec GPT-4-turbo Vision
         if "photo" in update["message"]:
             file_id = update["message"]["photo"][-1]["file_id"]
             file_path = get_file_path(file_id)
@@ -75,7 +74,6 @@ def webhook():
                 ingredients_detected = vision_response.choices[0].message.content.strip()
                 send_message(chat_id, f"📸 *المكونات المستخرجة من الصورة:*\n{ingredients_detected}")
 
-                # 🔁 Générer suggestions automatiquement après extraction
                 suggestion_prompt = f"راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients_detected}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء."
                 suggestion_reply = openai.chat.completions.create(
                     model="gpt-4-turbo",
@@ -88,11 +86,36 @@ def webhook():
                 keyboard = {
                     "inline_keyboard": [[{"text": f"🍽️ {p.strip()}", "callback_data": p.strip()}] for p in plats.split("\n") if p.strip()] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
                 }
+                user_state[chat_id] = plats.split("\n")
                 send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب الصورة:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
 
             except Exception as e:
                 print(f"Erreur GPT-Vision: {e}")
                 send_message(chat_id, "❌ ماقدرتش نقرأ الصورة.")
             return "ok"
+
+    if "callback_query" in update:
+        query = update["callback_query"]
+        chat_id = str(query["message"]["chat"]["id"])
+        plat_choisi = query["data"]
+
+        if plat_choisi == "autres":
+            send_message(chat_id, "🔁 عاود كتبلي واش كاين عندك فالثلاجة من جديد.")
+            return "ok"
+
+        try:
+            prompt = f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة. ثم أعط تقدير تقريبي للسعرات الحرارية الكاملة لهذا الطبق."
+            gpt_reply = openai.chat.completions.create(
+                model="gpt-4-turbo",
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": plat_choisi}
+                ]
+            )
+            result_text = gpt_reply.choices[0].message.content.strip()
+            send_message(chat_id, result_text)
+        except Exception as e:
+            print(f"[GPT Inline Error] {e}")
+            send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
 
     return "ok"
