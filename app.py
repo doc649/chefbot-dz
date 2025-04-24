@@ -54,96 +54,45 @@ def webhook():
 
     if "message" in update:
         chat_id = str(update["message"]["chat"]["id"])
-        user_text = update["message"].get("text", "").strip()
 
-        if user_text.lower() == "/stop" and chat_id == ADMIN_ID:
-            stop_flags.add(chat_id)
-            send_message(chat_id, "✅ Réponses automatiques désactivées.")
+        # ✅ Gestion de photo avec GPT-4-turbo Vision
+        if "photo" in update["message"]:
+            file_id = update["message"]["photo"][-1]["file_id"]
+            file_path = get_file_path(file_id)
+            image_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+
+            try:
+                vision_response = openai.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": "Tu es un expert en cuisine DZ. Donne uniquement la liste des ingrédients visibles dans cette image, en arabe algérien, sans explication."},
+                        {"role": "user", "content": [
+                            {"type": "text", "text": "Voici l'image de mon frigo ou des ingrédients."},
+                            {"type": "image_url", "image_url": {"url": image_url}}
+                        ]}
+                    ]
+                )
+                ingredients_detected = vision_response.choices[0].message.content.strip()
+                send_message(chat_id, f"📸 *المكونات المستخرجة من الصورة:*\n{ingredients_detected}")
+
+                # 🔁 Générer suggestions automatiquement après extraction
+                suggestion_prompt = f"راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients_detected}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء."
+                suggestion_reply = openai.chat.completions.create(
+                    model="gpt-4-turbo",
+                    messages=[
+                        {"role": "system", "content": suggestion_prompt},
+                        {"role": "user", "content": ingredients_detected}
+                    ]
+                )
+                plats = suggestion_reply.choices[0].message.content.strip()
+                keyboard = {
+                    "inline_keyboard": [[{"text": f"🍽️ {p.strip()}", "callback_data": p.strip()}] for p in plats.split("\n") if p.strip()] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
+                }
+                send_message(chat_id, f"👨‍🍳 🇩🇿 *اقتراحاتي حسب الصورة:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.", reply_markup=keyboard)
+
+            except Exception as e:
+                print(f"Erreur GPT-Vision: {e}")
+                send_message(chat_id, "❌ ماقدرتش نقرأ الصورة.")
             return "ok"
-
-        if user_text.lower() == "/resume" and chat_id == ADMIN_ID:
-            stop_flags.discard(chat_id)
-            send_message(chat_id, "🔄 Réponses automatiques réactivées.")
-            return "ok"
-
-        if chat_id in stop_flags:
-            return "ok"
-
-        if user_text.lower() in ["/lang_dz", "darija"]:
-            user_languages[chat_id] = "darija"
-            send_message(chat_id, "✅ تم تغيير اللغة إلى الدارجة الجزائرية 🇩🇿")
-            return "ok"
-        elif user_text.lower() in ["/lang_ar", "arabe"]:
-            user_languages[chat_id] = "arabe"
-            send_message(chat_id, "✅ تم تغيير اللغة إلى العربية 🇩🇿")
-            return "ok"
-        elif user_text.lower() in ["/lang_fr", "français"]:
-            user_languages[chat_id] = "fr"
-            send_message(chat_id, "✅ Langue changée : Français 🇩🇿")
-            return "ok"
-
-        if user_text.lower() == "/start" and chat_id == ADMIN_ID:
-            accueil = (
-                "🇩🇿 *مرحبا بك في ChefBot DZ !* 🇩🇿\n\n"
-                "📸 صورلي الثلاجة تاعك، ولا 🗣️ كتبلي واش كاين عندك فالدار،\nباش نقترح عليك أكلة جزائرية مناسبة.\n\n"
-                "🍽️ نعطيك 3 اقتراحات لأكلات DZ، واختر واحدة باش نرسللك طريقتها.\n"
-                "🌐 اللغات المتاحة: /lang_dz (الدارجة), /lang_ar (العربية), /lang_fr (فرançaise)"
-            )
-            send_message(chat_id, accueil)
-            return "ok"
-
-        langue = user_languages.get(chat_id, "darija")
-
-        try:
-            prompt = {
-                "darija": "راك شاف جزايري. المستعمل عطاك هذه المكونات: {ingredients}. عطي غير 3 اقتراحات لوجبات DZ الممكنة فعليًا، بلا شرح ولا هدرة زايدة، فقط الاسماء.",
-                "arabe": "أنت شاف جزائري. المكونات المعطاة: {ingredients}. أعط 3 أطباق DZ واقعية ومناسبة فقط، دون شرح، فقط الأسماء.",
-                "fr": "Tu es un chef algérien. Voici les ingrédients: {ingredients}. Donne seulement 3 plats DZ vraiment réalisables avec, sans détails."
-            }[langue].format(ingredients=user_text)
-
-            gpt_reply = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": user_text}
-                ]
-            )
-            plats = gpt_reply.choices[0].message.content.strip()
-            user_state[chat_id] = [p.strip() for p in plats.split("\n") if p.strip()]
-            keyboard = {
-                "inline_keyboard": [[{"text": f"🍽️ {p}", "callback_data": p}] for p in user_state[chat_id]] + [[{"text": "🔁 اقتراحات أخرى", "callback_data": "autres"}]]
-            }
-            send_message(
-                chat_id,
-                f"👨‍🍳 🇩🇿 *اقتراحاتي:*\n{plats}\n\n✅ اضغط على اسم الطبق باش نبعثلك الطريقة.",
-                reply_markup=keyboard
-            )
-        except Exception as e:
-            print(f"[GPT Suggestion Error] {e}")
-            send_message(chat_id, "❌ ماقدرتش نجاوب، جرب تعاود.")
-
-    elif "callback_query" in update:
-        query = update["callback_query"]
-        chat_id = str(query["message"]["chat"]["id"])
-        plat_choisi = query["data"]
-
-        if plat_choisi == "autres":
-            send_message(chat_id, "🔁 عاود كتبلي واش كاين عندك فالثلاجة من جديد.")
-            return "ok"
-
-        try:
-            prompt = f"راك شاف جزايري. المستخدم اختار {plat_choisi}. اشرح الطريقة المبسطة لتحضيرها من دون هدرة زايدة. ثم أعط تقدير تقريبي للسعرات الحرارية الكاملة لهذا الطبق."
-            gpt_reply = openai.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": plat_choisi}
-                ]
-            )
-            result_text = gpt_reply.choices[0].message.content.strip()
-            send_message(chat_id, result_text)
-        except Exception as e:
-            print(f"[GPT Inline Error] {e}")
-            send_message(chat_id, "❌ ماقدرتش نشرح الطريقة.")
 
     return "ok"
