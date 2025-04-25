@@ -26,7 +26,7 @@ def process_image(file_id):
     # GPT-4 Vision API call
     try:
         response = openai.chat.completions.create(
-            model="gpt-4-vision-preview",
+            model="gpt-4-turbo",
             messages=[
                 {"role": "user", "content": [
                     {"type": "text", "text": "Quels ingrédients reconnais-tu dans cette image ? Donne-moi uniquement les noms d'ingrédients, séparés par des virgules."},
