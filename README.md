@@ -1,25 +1,20 @@
-# 🤖 ChefBot DZ – Assistant culinaire algérien sur Telegram
+# ChefBot DZ 🇩🇿
 
-**ChefBot DZ** est un bot Telegram intelligent qui aide les familles algériennes à préparer des plats traditionnels selon ce qu’elles ont dans leur frigo 🧅🥔🍗
+Un bot Telegram intelligent qui propose des plats algériens à partir de :
+- Texte (ex : "pomme de terre, tomate")
+- Photo (frigo, ingrédients)
+- Plan repas 7j, estimation calorique, et plus...
 
-## 🚀 Fonctionnalités
+## Fonctionnalités
+- GPT-4 Vision (analyse photo)
+- OpenAI Whisper (à venir)
+- Génération automatique de recettes
+- Liste de courses
+- Plan nutritionnel
 
-- 📷 Envoie une photo de ton frigo ou de tes ingrédients → le bot te propose des plats algériens adaptés
-- 💬 Envoie une liste d’ingrédients en texte → le bot génère un menu DZ simple et bon marché
-- ⚖️ Pour chaque plat, tu reçois une estimation approximative des calories
-- 🧠 Adapté à la culture, aux habitudes et aux réalités économiques algériennes
-- 🗣️ Réponses en langage familier et chaleureux
+## Déploiement
+- Hébergé sur Render
+- Serveur Flask avec Webhook Telegram
 
-## 🔧 Technologies utilisées
-
-- Python (Flask)
-- API Telegram
-- OpenAI GPT-3.5 & GPT-4 Vision
-- Déploiement via Render
-
-## 🛠️ Installation locale (optionnel)
-
-```bash
-git clone https://github.com/ton-utilisateur/chefbot-dz.git
-cd chefbot-dz
-pip install -r requirements.txt
+## Utilisation
+Envoyer une photo ou un texte à votre bot Telegram. Il vous répond avec des idées de plats algériens ❤️🍲
