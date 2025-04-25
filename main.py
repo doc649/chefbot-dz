@@ -1,4 +1,5 @@
 # main.py
+# redeploy trigger
 from flask import Flask, request, jsonify
 from app.telegram_handler import handle_update
 from app.config import TELEGRAM_TOKEN
