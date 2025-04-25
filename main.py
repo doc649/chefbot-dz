@@ -4,7 +4,7 @@ from app.config import TELEGRAM_TOKEN
 
 app = Flask(__name__)
 
-@app.route(f"/webhook/{TELEGRAM_TOKEN}", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def webhook():
     update = request.get_json()
     return handle_update(update)
